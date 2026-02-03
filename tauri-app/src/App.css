@@ -1,0 +1,500 @@
+/* ============================================
+   macOS Liquid Glass Design System
+   ============================================ */
+
+/* ----------------------------------------
+   CSS Design Token System
+   ---------------------------------------- */
+:root {
+  /* Base colors */
+  --glass-tint: 255, 255, 255;
+  --surface-dark: 15, 18, 23;
+  --accent-blue: 59, 130, 246;
+  --accent-purple: 139, 92, 246;
+
+  /* Glass surfaces - 3 translucency levels */
+  --glass-surface: rgba(var(--glass-tint), 0.03);
+  --glass-elevated: rgba(var(--glass-tint), 0.06);
+  --glass-overlay: rgba(var(--glass-tint), 0.08);
+
+  /* Borders - the key to liquid glass */
+  --border-subtle: rgba(var(--glass-tint), 0.08);
+  --border-light: rgba(var(--glass-tint), 0.12);
+  --border-glow: rgba(var(--glass-tint), 0.18);
+  --border-accent: rgba(var(--accent-blue), 0.4);
+
+  /* Blur intensities */
+  --blur-subtle: 8px;
+  --blur-medium: 16px;
+  --blur-strong: 24px;
+
+  /* Shadows - layered depth */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+  --shadow-glow: 0 0 20px rgba(var(--accent-blue), 0.15);
+
+  /* Text hierarchy */
+  --text-primary: rgba(255, 255, 255, 0.95);
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-tertiary: rgba(255, 255, 255, 0.5);
+  --text-muted: rgba(255, 255, 255, 0.35);
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-medium: 250ms ease;
+  --transition-slow: 400ms ease;
+}
+
+/* ----------------------------------------
+   Base Reset & Typography
+   ---------------------------------------- */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  /* SF Pro Display characteristics */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display",
+    "Segoe UI", sans-serif;
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Deep background for glass contrast */
+  background: linear-gradient(
+    145deg,
+    rgb(var(--surface-dark)) 0%,
+    rgb(12, 14, 18) 50%,
+    rgb(8, 10, 14) 100%
+  );
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+/* ----------------------------------------
+   App Shell
+   ---------------------------------------- */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+/* Subtle noise texture overlay for materiality */
+.app-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.015;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ----------------------------------------
+   Toolbar - Floating Glass Bar
+   ---------------------------------------- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  margin: var(--space-md) var(--space-lg) 0;
+  border-radius: var(--radius-lg);
+
+  /* Glass effect */
+  background: var(--glass-elevated);
+  backdrop-filter: blur(var(--blur-medium)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-medium)) saturate(180%);
+
+  /* Light-catching top border gradient */
+  border: 1px solid var(--border-subtle);
+  border-top-color: var(--border-glow);
+
+  /* Layered shadow for depth */
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  /* Smooth transitions */
+  transition: background var(--transition-medium),
+    box-shadow var(--transition-medium);
+}
+
+.toolbar:hover {
+  background: var(--glass-overlay);
+}
+
+.toolbar-title {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.toolbar-actions button {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+
+  /* Glass morphism button */
+  background: var(--glass-surface);
+  backdrop-filter: blur(var(--blur-subtle));
+  -webkit-backdrop-filter: blur(var(--blur-subtle));
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+
+  /* Subtle shadow */
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+
+  transition: all var(--transition-fast);
+}
+
+.toolbar-actions button:hover {
+  background: var(--glass-elevated);
+  border-color: var(--border-light);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.toolbar-actions button:active {
+  transform: translateY(0);
+  background: var(--glass-surface);
+  box-shadow: var(--shadow-sm), var(--shadow-inset);
+}
+
+.toolbar-actions button:focus-visible {
+  outline: none;
+  border-color: rgba(var(--accent-blue), 0.5);
+  box-shadow: var(--shadow-md), 0 0 0 3px rgba(var(--accent-blue), 0.2);
+}
+
+/* ----------------------------------------
+   Content Area
+   ---------------------------------------- */
+.content {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+  min-height: 0; /* Enable proper scrolling */
+}
+
+/* ----------------------------------------
+   Side Panel - Glass Panel
+   ---------------------------------------- */
+.side-panel {
+  position: relative;
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+
+  /* Semi-transparent glass background */
+  background: var(--glass-elevated);
+  backdrop-filter: blur(var(--blur-medium)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--blur-medium)) saturate(150%);
+
+  /* Luminous border on light-facing edges */
+  border: 1px solid var(--border-subtle);
+  border-top-color: var(--border-light);
+  border-left-color: var(--border-light);
+
+  /* Inner shadow for inset depth */
+  box-shadow: var(--shadow-md), var(--shadow-inset),
+    inset 0 0 30px rgba(0, 0, 0, 0.1);
+
+  /* Future: collapsible sidebar support */
+  transition: width var(--transition-slow), opacity var(--transition-medium),
+    transform var(--transition-medium);
+}
+
+/* Inner glow effect */
+.side-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse at top left,
+    rgba(255, 255, 255, 0.04) 0%,
+    transparent 60%
+  );
+  pointer-events: none;
+}
+
+.side-panel h3 {
+  margin: 0 0 var(--space-md);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.side-panel p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
+
+/* ----------------------------------------
+   Terminal Panel - Glass Frame
+   ---------------------------------------- */
+.terminal-panel {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+
+  /* Glass border frame */
+  background: linear-gradient(
+    145deg,
+    rgba(var(--glass-tint), 0.04) 0%,
+    rgba(var(--glass-tint), 0.02) 100%
+  );
+
+  border: 1px solid var(--border-subtle);
+  border-top-color: var(--border-light);
+  border-left-color: var(--border-light);
+
+  /* Depth shadow */
+  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* Inner terminal container - keeps content crisp */
+.terminal-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse at top left,
+    rgba(255, 255, 255, 0.02) 0%,
+    transparent 50%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Terminal inner glow/shadow frame */
+.terminal-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.3),
+    inset 0 2px 4px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ghostty-host {
+  position: absolute;
+  inset: 0;
+  outline: none;
+  /* Terminal content stays crisp - no blur */
+  background: rgb(8, 10, 14);
+}
+
+/* ----------------------------------------
+   Future: Tab System
+   ---------------------------------------- */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: var(--space-sm);
+  background: var(--glass-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.tab {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tab:hover {
+  background: var(--glass-surface);
+  color: var(--text-primary);
+}
+
+.tab.active {
+  background: var(--glass-elevated);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ----------------------------------------
+   Future: Modal/Overlay Glass Styles
+   ---------------------------------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  width: 90%;
+  max-width: 500px;
+  padding: var(--space-xl);
+  border-radius: var(--radius-xl);
+  background: var(--glass-overlay);
+  backdrop-filter: blur(var(--blur-strong)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-strong)) saturate(180%);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+}
+
+/* ----------------------------------------
+   Future: Command Palette
+   ---------------------------------------- */
+.command-palette {
+  position: fixed;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 600px;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: var(--glass-overlay);
+  backdrop-filter: blur(var(--blur-strong)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-strong)) saturate(180%);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  z-index: 1001;
+}
+
+.command-palette-input {
+  width: 100%;
+  padding: var(--space-lg);
+  font-size: 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.command-palette-input::placeholder {
+  color: var(--text-muted);
+}
+
+.command-palette-results {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.command-palette-item {
+  padding: var(--space-md) var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.command-palette-item:hover,
+.command-palette-item.selected {
+  background: var(--glass-elevated);
+}
+
+/* ----------------------------------------
+   Scrollbar Styling
+   ---------------------------------------- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-light);
+}
+
+/* ----------------------------------------
+   Selection Styling
+   ---------------------------------------- */
+::selection {
+  background: rgba(var(--accent-blue), 0.3);
+  color: inherit;
+}
+
+/* ----------------------------------------
+   Focus Visible - Luminous Ring
+   ---------------------------------------- */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--accent-blue), 0.5),
+    0 0 0 4px rgba(var(--accent-blue), 0.2);
+}
+
+/* ----------------------------------------
+   Responsive Adjustments
+   ---------------------------------------- */
+@media (max-width: 768px) {
+  .content {
+    grid-template-columns: 1fr;
+  }
+
+  .side-panel {
+    order: 2;
+  }
+
+  .terminal-panel {
+    min-height: 400px;
+  }
+}
