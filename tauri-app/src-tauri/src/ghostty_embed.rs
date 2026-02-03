@@ -30,6 +30,7 @@ pub struct GhosttyInsets {
 }
 
 #[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
 pub struct GhosttyStyle {
     #[serde(default)]
     pub insets: GhosttyInsets,
@@ -623,8 +624,7 @@ fn content_and_webview(window: &Window) -> Result<(Retained<NSView>, Retained<NS
 }
 
 #[cfg(target_os = "macos")]
-fn rect_to_frame(content_view: &NSView, webview_view: &NSView, rect: GhosttyRect) -> NSRect {
-
+fn rect_to_frame(_content_view: &NSView, webview_view: &NSView, rect: GhosttyRect) -> NSRect {
     let insets = rect.style.insets;
     let mut width = rect.width - (insets.left + insets.right);
     let mut height = rect.height - (insets.top + insets.bottom);
@@ -634,93 +634,24 @@ fn rect_to_frame(content_view: &NSView, webview_view: &NSView, rect: GhosttyRect
     let x = rect.x + insets.left;
     let y = rect.y + insets.top;
 
-    // Get frames and bounds for debugging
     let webview_frame = webview_view.frame();
-    let content_frame = content_view.frame();
-    let content_flipped = content_view.isFlipped();
 
-    // Get class names for debugging
-    let webview_class = webview_view.class().name();
-    let content_class = content_view.class().name();
-
-    // Walk up view hierarchy from webview
-    let mut parent_info = String::new();
-    let mut current: Option<Retained<NSView>> = unsafe { webview_view.superview() };
-    let mut depth = 0;
-    while let Some(ref view) = current {
-        let class_name = view.class().name();
-        let frame = view.frame();
-        parent_info.push_str(&format!("\n    parent[{}]: {} frame=({:.1},{:.1} {:.1}x{:.1})",
-            depth, class_name, frame.origin.x, frame.origin.y, frame.size.width, frame.size.height));
-        current = unsafe { view.superview() };
-        depth += 1;
-        if depth > 5 { break; }
-    }
-
-    // Also walk down to find children (look for WKWebView)
-    let mut children_info = String::new();
-    let subviews = unsafe { webview_view.subviews() };
-    let count = subviews.len();
-    for i in 0..count {
-        let subview = &subviews[i];
-        let class_name = subview.class().name();
-        let frame = subview.frame();
-        let flipped = subview.isFlipped();
-        children_info.push_str(&format!("\n    child[{}]: {} frame=({:.1},{:.1} {:.1}x{:.1}) flipped={}",
-            i, class_name, frame.origin.x, frame.origin.y, frame.size.width, frame.size.height, flipped));
-    }
-
-    eprintln!("=== rect_to_frame ===");
-    eprintln!("  webview class: {}", webview_class);
-    eprintln!("  content class: {}", content_class);
-    eprintln!("  view hierarchy from webview:{}", parent_info);
-    eprintln!("  children of webview:{}", children_info);
-    eprintln!("  JS rect: x={:.1}, y={:.1}, w={:.1}, h={:.1}", rect.x, rect.y, rect.width, rect.height);
-    eprintln!("  after insets: x={:.1}, y={:.1}, w={:.1}, h={:.1}", x, y, width, height);
-    eprintln!("  webview frame: origin=({:.1}, {:.1}), size=({:.1}x{:.1})",
-        webview_frame.origin.x, webview_frame.origin.y,
-        webview_frame.size.width, webview_frame.size.height);
-    eprintln!("  content frame: origin=({:.1}, {:.1}), size=({:.1}x{:.1})",
-        content_frame.origin.x, content_frame.origin.y,
-        content_frame.size.width, content_frame.size.height);
-    eprintln!("  content flipped: {}", content_flipped);
-
+    // Convert from web coordinates to NSView coordinates.
+    //
     // Web coordinates: y=0 at top, increases downward
-    // We need to convert from web coords to content_view coords
-    // Try using convertRect from webview which should handle the coordinate transformation
-    let x_in_content = webview_frame.origin.x + x;
-
-    // Calculate y based on whether we need to flip
-    // The terminal is shifted UP by exactly the rect.y amount, suggesting we might need
-    // to use web coordinates directly since WryWebViewParent might handle the flip internally
-    let y_flipped = webview_frame.size.height - y - height;
-
-    eprintln!("  y calculation: webview_height={:.1} - y={:.1} - height={:.1} = y_flipped={:.1}",
-        webview_frame.size.height, y, height, y_flipped);
-
-    // Try both calculations and log them
-    let y_direct = y;  // Use web coords directly (y from top)
-    eprintln!("  trying: y_flipped={:.1} (NSView style) vs y_direct={:.1} (web style)", y_flipped, y_direct);
-
-    // The webview frame includes the title bar area (~28px on macOS).
-    // JS coordinates are relative to window.innerHeight (visible content area).
-    // We need to convert from visible content coords to NSView coords.
+    // NSView coordinates: y=0 at bottom, increases upward
     //
-    // visible_height = webview_height - title_bar_height
-    // In visible coords: y_from_bottom = visible_height - y - height
-    // This maps directly to NSView y since visible content fills from bottom.
+    // The webview frame includes the macOS title bar area (~28px).
+    // JS coordinates (getBoundingClientRect) are relative to window.innerHeight,
+    // which excludes the title bar. We need to account for this offset.
     //
-    // Empirically determined: the title bar offset is ~28px on macOS
+    // visible_height = webview_frame_height - title_bar_height
+    // y_in_nsview = visible_height - y - height
     let title_bar_offset = 28.0;
     let visible_height = webview_frame.size.height - title_bar_offset;
+
+    let x_in_content = webview_frame.origin.x + x;
     let y_in_content = visible_height - y - height;
-
-    eprintln!("  title_bar_offset={:.1}, visible_height={:.1}", title_bar_offset, visible_height);
-    eprintln!("  y_in_content = {:.1} - {:.1} - {:.1} = {:.1}",
-        visible_height, y, height, y_in_content);
-
-    eprintln!("  result: x={:.1}, y={:.1}, w={:.1}, h={:.1}",
-        x_in_content, y_in_content, width, height);
 
     NSRect::new(NSPoint::new(x_in_content, y_in_content), NSSize::new(width, height))
 }
