@@ -1,0 +1,479 @@
+/* ============================================
+   Project Explorer - Glass Morphism Styles
+   ============================================ */
+
+/* Container */
+.project-explorer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.project-explorer:focus {
+  outline: none;
+}
+
+/* Header with title and add button */
+.project-explorer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+
+.project-explorer-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Add project button (header) */
+.add-project-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--glass-surface);
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.add-project-btn:hover {
+  background: var(--glass-elevated);
+  border-color: var(--border-light);
+  color: var(--text-primary);
+}
+
+.add-project-btn:active {
+  transform: scale(0.95);
+}
+
+/* Add folder button (per project header) */
+.add-folder-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
+}
+
+.project-header:hover .add-folder-btn {
+  opacity: 1;
+}
+
+.add-folder-btn:hover {
+  background: var(--glass-surface);
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+/* Empty state */
+.project-explorer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+}
+
+.project-explorer-empty p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.add-project-empty-btn {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--glass-surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.add-project-empty-btn:hover {
+  background: var(--glass-elevated);
+  border-color: var(--border-light);
+  color: var(--text-primary);
+}
+
+/* Project List */
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Project Item */
+.project-item {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Project Header */
+.project-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast);
+}
+
+.project-header:hover {
+  background: var(--glass-surface);
+  transform: scale(1.005);
+}
+
+.project-header:active {
+  transform: scale(0.998);
+}
+
+.project-header:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--accent-blue), 0.5);
+}
+
+.project-chevron {
+  color: var(--text-tertiary);
+  /* Spring-like easing for delightful chevron rotation */
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  flex-shrink: 0;
+}
+
+.project-chevron--expanded {
+  transform: rotate(90deg);
+}
+
+.project-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.project-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--glass-surface);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+/* Project Folders Container */
+.project-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: var(--space-lg);
+  margin-top: var(--space-xs);
+}
+
+/* ----------------------------------------
+   Folder Item - Conductor-style Two-Line Layout
+   ---------------------------------------- */
+.folder-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
+}
+
+.folder-item:hover {
+  background: var(--glass-surface);
+}
+
+.folder-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--accent-blue), 0.5);
+}
+
+.folder-item--active {
+  background: var(--glass-elevated);
+  border-color: var(--border-subtle);
+}
+
+.folder-item--active:hover {
+  background: var(--glass-overlay);
+}
+
+/* Status Dot */
+.folder-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.folder-item--active .folder-status-dot {
+  background: rgb(var(--accent-blue));
+}
+
+/* Content Container */
+.folder-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Primary Row: Branch + Diff Stats */
+.folder-row-primary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.folder-branch {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  letter-spacing: -0.02em;
+}
+
+/* Secondary Row: Folder Name + PR + Hotkey */
+.folder-row-secondary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.folder-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hotkey badge in secondary row */
+.folder-row-secondary .hotkey-badge {
+  margin-left: auto;
+}
+
+/* Branch Badge - compact */
+.branch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-surface);
+  border: 1px solid var(--border-subtle);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  max-width: 100px;
+  flex-shrink: 0;
+}
+
+.branch-badge svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.branch-name {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Diff Stats - Text Display */
+.diff-stats-text {
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.diff-additions {
+  color: #4ade80;
+}
+
+.diff-deletions {
+  color: #f87171;
+}
+
+/* PR Indicator - compact */
+.pr-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.pr-indicator:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--accent-purple), 0.5);
+}
+
+.pr-indicator svg {
+  flex-shrink: 0;
+}
+
+/* PR States */
+.pr-open {
+  background: rgba(var(--accent-purple), 0.15);
+  color: rgb(var(--accent-purple));
+  border-color: rgba(var(--accent-purple), 0.3);
+}
+
+.pr-open:hover {
+  background: rgba(var(--accent-purple), 0.25);
+  border-color: rgba(var(--accent-purple), 0.5);
+}
+
+.pr-merged {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.pr-merged:hover {
+  background: rgba(139, 92, 246, 0.25);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.pr-closed {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.pr-closed:hover {
+  background: rgba(248, 113, 113, 0.25);
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+/* PR Open pulse animation */
+.pr-open {
+  animation: pr-pulse 2s ease-in-out infinite;
+}
+
+@keyframes pr-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(var(--accent-purple), 0);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(var(--accent-purple), 0.15);
+  }
+}
+
+/* Merged PR checkmark overlay */
+.pr-merged .pr-check-overlay {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 10px;
+  height: 10px;
+  background: #a78bfa;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pr-merged .pr-check-overlay svg {
+  width: 6px;
+  height: 6px;
+  color: white;
+}
+
+/* PR indicator needs relative for overlay */
+.pr-indicator {
+  position: relative;
+}
+
+/* Hotkey badges */
+.hotkey-badge {
+  display: none;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  color: var(--text-muted);
+  background: var(--glass-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: auto;
+}
+
+/* Show hotkeys when meta key held */
+.project-explorer--show-hotkeys .hotkey-badge {
+  display: inline-flex;
+}
+
+/* Focus ring for keyboard navigation */
+.folder-item--focused {
+  box-shadow: 0 0 0 2px rgba(var(--accent-blue), 0.5);
+}
+
+/* Project separator lines */
+.project-item + .project-item {
+  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--border-subtle);
+}

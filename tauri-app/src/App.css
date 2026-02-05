@@ -206,10 +206,35 @@ body {
 .content {
   flex: 1;
   display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: var(--space-lg);
+  /* grid-template-columns set via inline style for resize */
+  gap: 0;
   padding: var(--space-lg);
   min-height: 0; /* Enable proper scrolling */
+}
+
+/* Disable text selection during resize */
+.content--resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+
+/* ----------------------------------------
+   Resize Handle
+   ---------------------------------------- */
+.resize-handle {
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background var(--transition-fast);
+  z-index: 10;
+}
+
+.resize-handle:hover {
+  background: rgba(var(--accent-blue), 0.4);
+}
+
+.resize-handle--active {
+  background: rgba(var(--accent-blue), 0.6);
 }
 
 /* ----------------------------------------
@@ -326,6 +351,22 @@ body {
   outline: none;
   /* Terminal content stays crisp - no blur */
   background: rgb(8, 10, 14);
+}
+
+/* Empty terminal state */
+.empty-terminal-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(8, 10, 14);
+}
+
+.empty-terminal-state p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
 /* ----------------------------------------

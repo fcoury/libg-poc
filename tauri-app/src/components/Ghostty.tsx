@@ -32,6 +32,7 @@ type GhosttyProps = {
   options?: GhosttyOptions;
   className?: string;
   styleSource?: "self" | "parent";
+  visible?: boolean;
 };
 
 function readStyle(el: HTMLElement): GhosttyStyle {
@@ -85,13 +86,41 @@ export function Ghostty({
   options,
   className,
   styleSource = "parent",
+  visible = true,
 }: GhosttyProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const optionsRef = useRef<GhosttyOptions | undefined>(options);
+  const visibleRef = useRef(visible);
+  const createdRef = useRef(false);
 
   useEffect(() => {
     optionsRef.current = options;
   }, [options]);
+
+  // Keep visibleRef in sync
+  useEffect(() => {
+    visibleRef.current = visible;
+  }, [visible]);
+
+  // Handle visibility changes after creation
+  useEffect(() => {
+    if (!createdRef.current) return;
+
+    if (visible) {
+      // Show: update rect, make visible, focus
+      const el = ref.current;
+      if (el) {
+        const sourceEl = styleSource === "parent" ? el.parentElement ?? el : el;
+        invoke("ghostty_update_rect", { id, rect: readRect(sourceEl) }).catch(console.error);
+      }
+      invoke("ghostty_set_visible", { id, visible: true }).catch(console.error);
+      invoke("ghostty_focus", { id, focused: true }).catch(console.error);
+    } else {
+      // Hide: unfocus, then hide
+      invoke("ghostty_focus", { id, focused: false }).catch(console.error);
+      invoke("ghostty_set_visible", { id, visible: false }).catch(console.error);
+    }
+  }, [visible, id, styleSource]);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -109,10 +138,17 @@ export function Ghostty({
         rect: readRect(sourceEl),
         options: optionsRef.current,
       });
+      createdRef.current = true;
+      // If created hidden, hide immediately
+      if (!visibleRef.current) {
+        await invoke("ghostty_set_visible", { id, visible: false });
+      }
     };
 
     const update = async () => {
       if (!ref.current || destroyed) return;
+      // Skip rect updates for hidden terminals
+      if (!visibleRef.current) return;
       await invoke("ghostty_update_rect", {
         id,
         rect: readRect(sourceEl),
@@ -142,6 +178,7 @@ export function Ghostty({
 
     return () => {
       destroyed = true;
+      createdRef.current = false;
       if (frameHandle !== null) {
         window.cancelAnimationFrame(frameHandle);
       }

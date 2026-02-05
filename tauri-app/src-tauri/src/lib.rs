@@ -60,6 +60,24 @@ fn ghostty_destroy(
 }
 
 #[tauri::command]
+fn ghostty_set_visible(
+    window: tauri::Window,
+    id: String,
+    visible: bool,
+) -> Result<(), String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    window
+        .run_on_main_thread(move || {
+            let res = with_manager(|manager| manager.set_visible(&id, visible));
+            let _ = tx.send(res);
+        })
+        .map_err(|e| e.to_string())?;
+
+    rx.recv().unwrap_or_else(|_| Err("ghostty_set_visible failed".to_string()))
+}
+
+#[tauri::command]
 fn ghostty_focus(
     window: tauri::Window,
     id: String,
@@ -81,10 +99,12 @@ fn ghostty_focus(
 pub fn run() {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             ghostty_create,
             ghostty_update_rect,
             ghostty_destroy,
+            ghostty_set_visible,
             ghostty_focus
         ]);
 

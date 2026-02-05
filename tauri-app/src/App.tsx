@@ -1,7 +1,38 @@
+import { useState, useEffect } from "react";
 import { Ghostty } from "./components/Ghostty";
+import { ProjectExplorer } from "./components/ProjectExplorer";
+import { useTerminalManager } from "./hooks/useTerminalManager";
 import "./App.css";
 
 function App() {
+  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [isResizing, setIsResizing] = useState(false);
+  const { activeTerminalId, terminals, switchToFolder } = useTerminalManager();
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault();
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Account for content padding (16px on left)
+      const newWidth = Math.min(Math.max(e.clientX - 16, 200), 500);
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => setIsResizing(false);
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
   return (
     <main className="app-shell">
       <header className="toolbar">
@@ -12,13 +43,32 @@ function App() {
         </div>
       </header>
 
-      <section className="content">
+      <section
+        className={`content ${isResizing ? 'content--resizing' : ''}`}
+        style={{ gridTemplateColumns: `${sidebarWidth}px 6px 1fr` }}
+      >
         <div className="side-panel">
-          <h3>Chrome</h3>
-          <p>Use this panel to build your UI around the terminal.</p>
+          <ProjectExplorer onSelectFolder={switchToFolder} />
         </div>
+        <div
+          className={`resize-handle ${isResizing ? 'resize-handle--active' : ''}`}
+          onMouseDown={handleResizeStart}
+        />
         <div className="terminal-panel">
-          <Ghostty id="main-terminal" className="ghostty-host" />
+          {Array.from(terminals.entries()).map(([termId, entry]) => (
+            <Ghostty
+              key={termId}
+              id={termId}
+              className="ghostty-host"
+              visible={termId === activeTerminalId}
+              options={{ workingDirectory: entry.path }}
+            />
+          ))}
+          {terminals.size === 0 && (
+            <div className="empty-terminal-state">
+              <p>Select a folder to open a terminal</p>
+            </div>
+          )}
         </div>
       </section>
     </main>
