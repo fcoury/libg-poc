@@ -4,7 +4,7 @@ use std::{
     ffi::CString,
     os::raw::{c_char, c_void},
     ptr::{self, NonNull},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{atomic::{AtomicBool, Ordering}, OnceLock},
 };
 
 use serde::Deserialize;
@@ -58,6 +58,7 @@ pub struct GhosttyRect {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct GhosttyOptions {
     pub font_size: Option<f32>,
     pub working_directory: Option<String>,
@@ -133,6 +134,24 @@ impl GhosttyManager {
             return Err(format!("Ghostty instance not found: {id}"));
         }
         Ok(())
+    }
+
+    pub fn set_visible(&mut self, id: &str, visible: bool) -> Result<(), String> {
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (id, visible);
+            return Err("Ghostty embedding is only supported on macOS".to_string());
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let instance = self
+                .instances
+                .get_mut(id)
+                .ok_or_else(|| format!("Ghostty instance not found: {id}"))?;
+            instance.view.setHidden(!visible);
+            Ok(())
+        }
     }
 
     pub fn focus(&mut self, id: &str, focused: bool) -> Result<(), String> {
@@ -222,9 +241,17 @@ impl GhosttyInstance {
 
         let instance_ptr = &mut *instance as *mut GhosttyInstance;
 
-        let init_res = unsafe { ghostty_init() };
-        if init_res != GHOSTTY_SUCCESS as i32 {
-            return Err("ghostty_init failed".to_string());
+        static GHOSTTY_INIT: OnceLock<Result<(), String>> = OnceLock::new();
+        let init_result = GHOSTTY_INIT.get_or_init(|| {
+            let res = unsafe { ghostty_init() };
+            if res != GHOSTTY_SUCCESS as i32 {
+                Err("ghostty_init failed".to_string())
+            } else {
+                Ok(())
+            }
+        });
+        if let Err(e) = init_result {
+            return Err(e.clone());
         }
 
         let config = unsafe { ghostty_config_new() };
