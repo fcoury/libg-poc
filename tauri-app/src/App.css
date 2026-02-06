@@ -200,6 +200,13 @@ body {
   box-shadow: var(--shadow-md), 0 0 0 3px rgba(var(--accent-blue), 0.2);
 }
 
+.toolbar-actions .toolbar-btn--active {
+  background: rgba(var(--accent-blue), 0.15);
+  border-color: rgba(var(--accent-blue), 0.3);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm), 0 0 12px rgba(var(--accent-blue), 0.1);
+}
+
 /* ----------------------------------------
    Content Area
    ---------------------------------------- */

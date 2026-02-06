@@ -171,6 +171,66 @@ impl GhosttyManager {
             Ok(())
         }
     }
+
+    pub fn write_text(&mut self, id: &str, text: &str) -> Result<(), String> {
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (id, text);
+            return Err("Ghostty embedding is only supported on macOS".to_string());
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let instance = self
+                .instances
+                .get_mut(id)
+                .ok_or_else(|| format!("Ghostty instance not found: {id}"))?;
+
+            // Split on \n and \r — send text segments via ghostty_surface_text
+            // and newlines as Enter keypresses via ghostty_surface_key.
+            let mut segment_start = 0;
+            for (i, ch) in text.char_indices() {
+                if ch == '\n' || ch == '\r' {
+                    if i > segment_start {
+                        let segment = &text[segment_start..i];
+                        unsafe {
+                            ghostty_surface_text(
+                                instance.ghostty_surface,
+                                segment.as_ptr() as *const _,
+                                segment.len(),
+                            );
+                        }
+                    }
+                    // macOS virtual keycode for Return = 0x24
+                    const VK_RETURN: u32 = 0x24;
+                    let key_event = ghostty_input_key_s {
+                        action: ghostty_input_action_e_GHOSTTY_ACTION_PRESS,
+                        mods: ghostty_input_mods_e_GHOSTTY_MODS_NONE,
+                        keycode: VK_RETURN,
+                        text: ptr::null(),
+                        composing: false,
+                    };
+                    unsafe {
+                        ghostty_surface_key(instance.ghostty_surface, key_event);
+                    }
+                    segment_start = i + ch.len_utf8();
+                }
+            }
+            // Send any remaining text after the last newline
+            if segment_start < text.len() {
+                let segment = &text[segment_start..];
+                unsafe {
+                    ghostty_surface_text(
+                        instance.ghostty_surface,
+                        segment.as_ptr() as *const _,
+                        segment.len(),
+                    );
+                }
+            }
+
+            Ok(())
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]

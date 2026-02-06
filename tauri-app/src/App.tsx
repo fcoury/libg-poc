@@ -1,12 +1,16 @@
 import { useState, useEffect } from "react";
 import { Ghostty } from "./components/Ghostty";
 import { ProjectExplorer } from "./components/ProjectExplorer";
+import { AiChat } from "./components/AiChat";
 import { useTerminalManager } from "./hooks/useTerminalManager";
 import "./App.css";
+
+type SidePanel = "explorer" | "ai";
 
 function App() {
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [isResizing, setIsResizing] = useState(false);
+  const [activePanel, setActivePanel] = useState<SidePanel>("explorer");
   const { activeTerminalId, terminals, switchToFolder } = useTerminalManager();
 
   const handleResizeStart = (e: React.MouseEvent) => {
@@ -38,6 +42,15 @@ function App() {
       <header className="toolbar">
         <div className="toolbar-title">Ghostty + Tauri</div>
         <div className="toolbar-actions">
+          <button
+            type="button"
+            className={activePanel === "ai" ? "toolbar-btn--active" : ""}
+            onClick={() =>
+              setActivePanel((p) => (p === "ai" ? "explorer" : "ai"))
+            }
+          >
+            AI
+          </button>
           <button type="button">Split</button>
           <button type="button">Settings</button>
         </div>
@@ -48,7 +61,11 @@ function App() {
         style={{ gridTemplateColumns: `${sidebarWidth}px 6px 1fr` }}
       >
         <div className="side-panel">
-          <ProjectExplorer onSelectFolder={switchToFolder} />
+          {activePanel === "explorer" ? (
+            <ProjectExplorer onSelectFolder={switchToFolder} />
+          ) : (
+            <AiChat terminalId={activeTerminalId} />
+          )}
         </div>
         <div
           className={`resize-handle ${isResizing ? 'resize-handle--active' : ''}`}
