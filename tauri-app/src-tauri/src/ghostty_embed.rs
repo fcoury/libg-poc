@@ -15,7 +15,7 @@ use {
     ghostty_sys::*,
     objc2::{declare_class, msg_send_id, mutability, ClassType, DeclaredClass},
     objc2::rc::Retained,
-    objc2_app_kit::{NSEvent, NSEventModifierFlags, NSView, NSWindowOrderingMode},
+    objc2_app_kit::{NSEvent, NSEventModifierFlags, NSTrackingArea, NSTrackingAreaOptions, NSView, NSWindowOrderingMode},
     objc2_foundation::{MainThreadMarker, NSPoint, NSRect, NSSize, NSTimer},
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
     tauri::Window,
@@ -291,6 +291,11 @@ impl GhosttyInstance {
             );
         }
 
+        // Enable mouse-moved events on the window so mouseMoved: fires
+        if let Some(ns_window) = webview_view.window() {
+            ns_window.setAcceptsMouseMovedEvents(true);
+        }
+
         let mut instance = Box::new(Self {
             ghostty_app: ptr::null_mut(),
             ghostty_surface: ptr::null_mut(),
@@ -518,9 +523,25 @@ impl GhosttyInstance {
         let location = unsafe { event.locationInWindow() };
         let local = self.view.convertPoint_fromView(location, None);
         let bounds = self.view.bounds();
+        let frame = self.view.frame();
         let scale = backing_scale_factor(&self.view);
         let x = local.x * scale;
         let y = (bounds.size.height - local.y) * scale;
+
+        use std::sync::atomic::{AtomicU32, Ordering as AtOrd};
+        static LOG_COUNT: AtomicU32 = AtomicU32::new(0);
+        let count = LOG_COUNT.fetch_add(1, AtOrd::Relaxed);
+        if count < 10 {
+            eprintln!("[ghostty-diag] event_position_px (#{count}):");
+            eprintln!("  locationInWindow: ({}, {})", location.x, location.y);
+            eprintln!("  convertPoint (local): ({}, {})", local.x, local.y);
+            eprintln!("  view.bounds: ({}, {})", bounds.size.width, bounds.size.height);
+            eprintln!("  view.frame: origin=({}, {}), size=({}, {})",
+                frame.origin.x, frame.origin.y, frame.size.width, frame.size.height);
+            eprintln!("  scale: {scale}");
+            eprintln!("  result: x={x}, y={y}");
+        }
+
         (x, y)
     }
 }
@@ -658,6 +679,34 @@ declare_class!(
         fn scroll_wheel(&self, event: &NSEvent) {
             self.with_state(|state| state.handle_scroll(event));
         }
+
+        #[method(updateTrackingAreas)]
+        fn update_tracking_areas(&self) {
+            unsafe {
+                // Remove all existing tracking areas
+                let areas = self.trackingAreas();
+                let count = areas.count();
+                for i in 0..count {
+                    let area = areas.objectAtIndex(i);
+                    self.removeTrackingArea(&area);
+                }
+
+                let options = NSTrackingAreaOptions::NSTrackingMouseMoved
+                    | NSTrackingAreaOptions::NSTrackingMouseEnteredAndExited
+                    | NSTrackingAreaOptions::NSTrackingActiveInKeyWindow
+                    | NSTrackingAreaOptions::NSTrackingInVisibleRect;
+
+                let tracking_area = NSTrackingArea::initWithRect_options_owner_userInfo(
+                    NSTrackingArea::alloc(),
+                    self.bounds(),
+                    options,
+                    Some(self),
+                    None,
+                );
+
+                self.addTrackingArea(&tracking_area);
+            }
+        }
     }
 );
 
@@ -711,7 +760,7 @@ fn content_and_webview(window: &Window) -> Result<(Retained<NSView>, Retained<NS
 }
 
 #[cfg(target_os = "macos")]
-fn rect_to_frame(_content_view: &NSView, webview_view: &NSView, rect: GhosttyRect) -> NSRect {
+fn rect_to_frame(content_view: &NSView, webview_view: &NSView, rect: GhosttyRect) -> NSRect {
     let insets = rect.style.insets;
     let mut width = rect.width - (insets.left + insets.right);
     let mut height = rect.height - (insets.top + insets.bottom);
@@ -722,6 +771,7 @@ fn rect_to_frame(_content_view: &NSView, webview_view: &NSView, rect: GhosttyRec
     let y = rect.y + insets.top;
 
     let webview_frame = webview_view.frame();
+    let content_bounds = content_view.bounds();
 
     // Convert from web coordinates to NSView coordinates.
     //
@@ -740,7 +790,27 @@ fn rect_to_frame(_content_view: &NSView, webview_view: &NSView, rect: GhosttyRec
     let x_in_content = webview_frame.origin.x + x;
     let y_in_content = visible_height - y - height;
 
-    NSRect::new(NSPoint::new(x_in_content, y_in_content), NSSize::new(width, height))
+    let frame = NSRect::new(NSPoint::new(x_in_content, y_in_content), NSSize::new(width, height));
+
+    eprintln!("[ghostty-diag] rect_to_frame:");
+    eprintln!("  JS rect: x={}, y={}, w={}, h={}", rect.x, rect.y, rect.width, rect.height);
+    eprintln!("  insets: top={}, right={}, bottom={}, left={}", insets.top, insets.right, insets.bottom, insets.left);
+    eprintln!("  after insets: x={x}, y={y}, w={width}, h={height}");
+    eprintln!("  webview_frame: origin=({}, {}), size=({}, {})",
+        webview_frame.origin.x, webview_frame.origin.y,
+        webview_frame.size.width, webview_frame.size.height);
+    eprintln!("  content_bounds: origin=({}, {}), size=({}, {})",
+        content_bounds.origin.x, content_bounds.origin.y,
+        content_bounds.size.width, content_bounds.size.height);
+    let content_flipped: bool = unsafe { objc2::msg_send![content_view, isFlipped] };
+    let webview_flipped: bool = unsafe { objc2::msg_send![webview_view, isFlipped] };
+    eprintln!("  content_view.isFlipped={content_flipped}");
+    eprintln!("  webview.isFlipped={webview_flipped}");
+    eprintln!("  title_bar_offset={title_bar_offset}, visible_height={visible_height}");
+    eprintln!("  result frame: origin=({}, {}), size=({}, {})",
+        frame.origin.x, frame.origin.y, frame.size.width, frame.size.height);
+
+    frame
 }
 
 #[cfg(target_os = "macos")]
