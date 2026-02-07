@@ -1,4 +1,27 @@
 fn main() {
+    // Conditionally add mcp-bridge capability when the mcp-debug feature is enabled.
+    // Only write when content differs to avoid triggering Tauri's file watcher loop.
+    let mcp_cap_path = std::path::Path::new("capabilities/mcp-debug.json");
+    if cfg!(feature = "mcp-debug") {
+        let desired = r#"{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "mcp-debug",
+  "description": "MCP bridge capability for debug builds",
+  "windows": ["main"],
+  "permissions": ["mcp-bridge:default"]
+}
+"#;
+        let needs_write = std::fs::read_to_string(mcp_cap_path)
+            .map(|existing| existing != desired)
+            .unwrap_or(true);
+        if needs_write {
+            std::fs::write(mcp_cap_path, desired)
+                .expect("failed to write mcp-debug capability");
+        }
+    } else if mcp_cap_path.exists() {
+        let _ = std::fs::remove_file(mcp_cap_path);
+    }
+
     tauri_build::build();
 
     // Link macOS frameworks required by libghostty.

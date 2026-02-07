@@ -8,10 +8,11 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev": "GHOSTTY_LOCATION=$PWD/../.tools/libghostty DYLD_LIBRARY_PATH=$PWD/../.tools/libghostty tauri dev"
+    "tauri:dev": "GHOSTTY_LOCATION=$PWD/../.tools/libghostty DYLD_LIBRARY_PATH=$PWD/../.tools/libghostty tauri dev",
+    "tauri:debug": "GHOSTTY_LOCATION=$PWD/../.tools/libghostty DYLD_LIBRARY_PATH=$PWD/../.tools/libghostty tauri dev --features mcp-debug"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2",
+    "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.6.0",
     "@tauri-apps/plugin-opener": "^2",
     "react": "^19.1.0",

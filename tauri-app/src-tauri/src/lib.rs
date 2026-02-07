@@ -149,7 +149,7 @@ pub fn run() {
             acp_client::acp_send_prompt,
         ]);
 
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, feature = "mcp-debug"))]
     {
         builder = builder.plugin(tauri_plugin_mcp_bridge::init());
     }
