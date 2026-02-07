@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "mcp-debug",
+  "description": "MCP bridge capability for debug builds",
+  "windows": ["main"],
+  "permissions": ["mcp-bridge:default"]
+}
