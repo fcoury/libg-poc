@@ -6,6 +6,8 @@ export type GhosttyRect = {
   y: number;
   width: number;
   height: number;
+  viewportWidth: number;
+  viewportHeight: number;
   style: GhosttyStyle;
 };
 
@@ -77,6 +79,8 @@ function readRect(el: HTMLElement): GhosttyRect {
     y: rect.top,
     width: rect.width,
     height: rect.height,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
     style: readStyle(el),
   };
 }

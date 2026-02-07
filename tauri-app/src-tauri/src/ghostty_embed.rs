@@ -53,6 +53,10 @@ pub struct GhosttyRect {
     pub y: f64,
     pub width: f64,
     pub height: f64,
+    #[serde(rename = "viewportWidth", default)]
+    pub viewport_width: Option<f64>,
+    #[serde(rename = "viewportHeight", default)]
+    pub viewport_height: Option<f64>,
     #[serde(default)]
     pub style: GhosttyStyle,
 }
@@ -776,13 +780,22 @@ fn rect_to_frame(content_view: &NSView, webview_view: &NSView, rect: GhosttyRect
     let webview_frame = webview_view.frame();
     let webview_bounds = webview_view.bounds();
     let webview_flipped: bool = unsafe { objc2::msg_send![webview_view, isFlipped] };
+    let viewport_height = rect
+        .viewport_height
+        .filter(|v| *v > 0.0)
+        .unwrap_or(webview_bounds.size.height);
+    let viewport_width = rect
+        .viewport_width
+        .filter(|v| *v > 0.0)
+        .unwrap_or(webview_bounds.size.width);
 
     // Convert from web (CSS) coordinates to webview view coordinates.
-    // JS coordinates: y=0 at top, increases downward.
+    // JS coordinates are relative to the visible web viewport (window.inner*),
+    // while AppKit bounds can include titlebar/full-size insets.
     let y_in_webview = if webview_flipped {
         webview_bounds.origin.y + y
     } else {
-        webview_bounds.origin.y + webview_bounds.size.height - y - height
+        webview_bounds.origin.y + viewport_height - y - height
     };
 
     let rect_in_webview = NSRect::new(
@@ -804,6 +817,12 @@ fn rect_to_frame(content_view: &NSView, webview_view: &NSView, rect: GhosttyRect
     eprintln!("  webview_bounds: origin=({}, {}), size=({}, {})",
         webview_bounds.origin.x, webview_bounds.origin.y,
         webview_bounds.size.width, webview_bounds.size.height);
+    eprintln!("  viewport: width={viewport_width}, height={viewport_height}");
+    eprintln!(
+        "  viewport inset: dx={}, dy={}",
+        webview_bounds.size.width - viewport_width,
+        webview_bounds.size.height - viewport_height
+    );
     let content_flipped: bool = unsafe { objc2::msg_send![content_view, isFlipped] };
     eprintln!("  content_view.isFlipped={content_flipped}");
     eprintln!("  webview.isFlipped={webview_flipped}");
