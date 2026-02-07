@@ -46,22 +46,25 @@ The `mcp-debug` feature (`just tauri-dev` with `--features mcp-debug`, or `npm r
 
 | File | Role |
 |------|------|
-| `lib.rs` | Tauri app entry point, registers all 19 commands, manages state |
+| `lib.rs` | Tauri app entry point, registers all commands, manages state. Uses `builder.build()` + `app.run()` to hook `RunEvent::Exit` for socket cleanup. |
 | `ghostty_embed.rs` | Embeds Ghostty terminal as NSView above webview. Handles coordinate conversion (JS viewport → AppKit window → view-local), HiDPI scaling, keyboard/mouse forwarding, 60Hz tick loop. Thread-local `GhosttyManager` holds all instances. |
 | `nvim_bridge.rs` | Neovim RPC bridge. `NvimHandler` receives `libg_action` notifications and emits Tauri events. `nvim_connect` injects Lua keybindings via `exec_lua`. `build_lua_setup()` generates the Lua code. |
 | `acp_client.rs` | ACP agent lifecycle. Spawns subprocess, runs `!Send` connection on dedicated thread, streams events to frontend via Tauri events (`acp-event`). |
+| `socket_manager.rs` | Neovim socket lifecycle. PID-scoped paths (`/tmp/libg-nvim-{pid}-{terminalId}.sock`), stale cleanup on startup via `libc::kill`, cleanup on exit via `RunEvent::Exit` and `Drop`. |
 
 ### React frontend (`tauri-app/src/`)
 
 | File | Role |
 |------|------|
-| `App.tsx` | Shell layout: resizable sidebar (explorer/AI) + terminal panel. Auto-switches to AI panel on `nvim-action` events. |
+| `App.tsx` | Shell layout: resizable sidebar (explorer/AI) + terminal panel. Auto-switches to AI panel on `nvim-action` events. Sidebar width and active panel persisted to localStorage. |
 | `components/Ghostty.tsx` | React wrapper for native Ghostty view. Manages lifecycle (create/update/destroy), ResizeObserver, focus. |
-| `components/AiChat/AiChat.tsx` | Chat UI with connection flow, message rendering, auto-apply toggle. |
-| `hooks/useAiChat.ts` | Orchestrates Neovim + ACP. Listens for `nvim-action` events, builds prompts from actions, manages streaming messages, auto-apply logic. |
+| `components/AiChat/AiChat.tsx` | Chat UI with connection flow, message rendering, auto-apply toggle. Gets socket path from Rust via `invoke("get_socket_path")`. |
+| `hooks/useLocalStorage.ts` | Generic hook wrapping `useState` with synchronous localStorage read on init and `useEffect` write on change. Foundation for all UI persistence. |
+| `hooks/useAiChat.ts` | Orchestrates Neovim + ACP. Listens for `nvim-action` events, builds prompts from actions, manages streaming messages, auto-apply logic. Messages and autoApply persisted to localStorage (trimmed to 200 on mount). |
 | `hooks/useNvimBridge.ts` | Neovim connection hook. Polls context + diagnostics every 2s. |
 | `hooks/useAcpAgent.ts` | ACP agent hook. Manages lifecycle, listens to `acp-event` Tauri events. |
-| `hooks/useTerminalManager.ts` | Terminal state. Lazy creation: terminals are only created when a folder is first selected. |
+| `hooks/useProjectExplorer.ts` | Project/folder state with deterministic path-based IDs (`stableId()`). Projects and active folder persisted to localStorage. Deduplicates on add. |
+| `hooks/useTerminalManager.ts` | Terminal state. Lazy creation: terminals are only created when a folder is first selected. Ephemeral (not persisted). |
 | `types/nvim.ts` | TypeScript types mirroring Rust structs. Includes `NvimAction` discriminated union for the 4 action types. |
 
 ### Config / Build
@@ -70,7 +73,7 @@ The `mcp-debug` feature (`just tauri-dev` with `--features mcp-debug`, or `npm r
 |------|------|
 | `Justfile` | Build recipes. `setup-libghostty` is the critical one-time setup. |
 | `tauri-app/src-tauri/build.rs` | Copies libghostty.dylib, adds rpath, links macOS frameworks. Generates MCP capability file when `mcp-debug` feature is on. |
-| `tauri-app/src-tauri/Cargo.toml` | `mcp-debug` feature gates `tauri-plugin-mcp-bridge`. `rmpv` has `with-serde` for msgpack deserialization. |
+| `tauri-app/src-tauri/Cargo.toml` | `mcp-debug` feature gates `tauri-plugin-mcp-bridge`. `rmpv` has `with-serde` for msgpack deserialization. `libc` used by `socket_manager.rs` for PID liveness checks. |
 | `AGENTS.md` | Commit message conventions (Conventional Commits). |
 
 ## Non-Obvious Knowledge
@@ -105,7 +108,26 @@ Neovim sends msgpack `Value` types. To convert to Rust structs, we go through tw
 
 ### Neovim socket path convention
 
-The app uses `/tmp/libg-nvim-{terminalId}.sock` as the socket path. `AiChat.tsx` sends `nvim --listen <path> .` to the terminal via `ghostty_write_text`, waits 1.5s, then connects. The terminal ID ties everything together: Ghostty instance, Neovim connection, and ACP events.
+Socket paths are PID-scoped: `/tmp/libg-nvim-{pid}-{terminalId}.sock`. The `SocketManager` in Rust owns the lifecycle — `get_socket_path` command generates and registers the path, `RunEvent::Exit` cleans up on close, and `cleanup_stale()` removes sockets from dead processes on startup. `AiChat.tsx` calls `invoke("get_socket_path")` then sends `nvim --listen <path> .` to the terminal via `ghostty_write_text`, waits 1.5s, then connects. The terminal ID ties everything together: Ghostty instance, Neovim connection, and ACP events.
+
+### UI state persistence via localStorage
+
+All persistent UI state uses `useLocalStorage` (a generic hook in `hooks/useLocalStorage.ts`). State is read synchronously on mount (no flash of defaults) and written via `useEffect` on change. Keys are prefixed with `libg:`.
+
+| Key | Type | Default | Owner |
+|-----|------|---------|-------|
+| `libg:sidebarWidth` | `number` | `260` | `App.tsx` |
+| `libg:activePanel` | `"explorer" \| "ai"` | `"explorer"` | `App.tsx` |
+| `libg:projects` | `Project[]` | `[]` | `useProjectExplorer` |
+| `libg:activeFolderId` | `string \| null` | `null` | `useProjectExplorer` |
+| `libg:chatMessages` | `ChatMessage[]` | `[]` | `useAiChat` |
+| `libg:autoApply` | `boolean` | `false` | `useAiChat` |
+
+Terminals are **not** persisted — they represent live Ghostty/Neovim sessions. On restart the project tree and chat history restore, but terminals are created lazily when the user selects a folder.
+
+### Project and folder IDs are deterministic
+
+`useProjectExplorer` uses `stableId(prefix, path)` — a simple numeric hash of the filesystem path converted to base-36. Same path always produces the same ID. This means persisted IDs survive restarts, and adding the same path twice is a no-op (deduplicated by ID).
 
 ### Neovim context polling
 
