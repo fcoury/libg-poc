@@ -425,9 +425,14 @@ impl GhosttyInstance {
 
         self.apply_style(rect.style);
 
-        let scale = backing_scale_factor(&content_view);
-        let width_px = (frame.size.width * scale).max(1.0) as u32;
-        let height_px = (frame.size.height * scale).max(1.0) as u32;
+        // Use the window's backing scale factor directly (matches the working
+        // standalone implementation). Avoids potential issues with
+        // convertRectToBacking on layer-backed views where contentsScale
+        // may not yet reflect the correct backing factor.
+        let bounds = self.view.bounds();
+        let scale = backing_scale_factor(self.view.as_super());
+        let width_px = (bounds.size.width * scale).max(1.0).round() as u32;
+        let height_px = (bounds.size.height * scale).max(1.0).round() as u32;
         unsafe {
             ghostty_surface_set_content_scale(self.ghostty_surface, scale, scale);
             ghostty_surface_set_size(self.ghostty_surface, width_px, height_px);
@@ -523,10 +528,11 @@ impl GhosttyInstance {
         let location = unsafe { event.locationInWindow() };
         let local = self.view.convertPoint_fromView(location, None);
         let bounds = self.view.bounds();
-        let frame = self.view.frame();
-        let scale = backing_scale_factor(&self.view);
-        let x = local.x * scale;
-        let y = (bounds.size.height - local.y) * scale;
+
+        // Ghostty embedded input expects view-space coordinates (points), not
+        // backing pixels. It applies content scale internally.
+        let x = local.x;
+        let y = bounds.size.height - local.y;
 
         use std::sync::atomic::{AtomicU32, Ordering as AtOrd};
         static LOG_COUNT: AtomicU32 = AtomicU32::new(0);
@@ -534,11 +540,8 @@ impl GhosttyInstance {
         if count < 10 {
             eprintln!("[ghostty-diag] event_position_px (#{count}):");
             eprintln!("  locationInWindow: ({}, {})", location.x, location.y);
-            eprintln!("  convertPoint (local): ({}, {})", local.x, local.y);
-            eprintln!("  view.bounds: ({}, {})", bounds.size.width, bounds.size.height);
-            eprintln!("  view.frame: origin=({}, {}), size=({}, {})",
-                frame.origin.x, frame.origin.y, frame.size.width, frame.size.height);
-            eprintln!("  scale: {scale}");
+            eprintln!("  local: ({}, {})", local.x, local.y);
+            eprintln!("  bounds: ({}, {})", bounds.size.width, bounds.size.height);
             eprintln!("  result: x={x}, y={y}");
         }
 
@@ -771,26 +774,25 @@ fn rect_to_frame(content_view: &NSView, webview_view: &NSView, rect: GhosttyRect
     let y = rect.y + insets.top;
 
     let webview_frame = webview_view.frame();
-    let content_bounds = content_view.bounds();
+    let webview_bounds = webview_view.bounds();
+    let webview_flipped: bool = unsafe { objc2::msg_send![webview_view, isFlipped] };
 
-    // Convert from web coordinates to NSView coordinates.
-    //
-    // Web coordinates: y=0 at top, increases downward
-    // NSView coordinates: y=0 at bottom, increases upward
-    //
-    // The webview frame includes the macOS title bar area (~28px).
-    // JS coordinates (getBoundingClientRect) are relative to window.innerHeight,
-    // which excludes the title bar. We need to account for this offset.
-    //
-    // visible_height = webview_frame_height - title_bar_height
-    // y_in_nsview = visible_height - y - height
-    let title_bar_offset = 28.0;
-    let visible_height = webview_frame.size.height - title_bar_offset;
+    // Convert from web (CSS) coordinates to webview view coordinates.
+    // JS coordinates: y=0 at top, increases downward.
+    let y_in_webview = if webview_flipped {
+        webview_bounds.origin.y + y
+    } else {
+        webview_bounds.origin.y + webview_bounds.size.height - y - height
+    };
 
-    let x_in_content = webview_frame.origin.x + x;
-    let y_in_content = visible_height - y - height;
-
-    let frame = NSRect::new(NSPoint::new(x_in_content, y_in_content), NSSize::new(width, height));
+    let rect_in_webview = NSRect::new(
+        NSPoint::new(webview_bounds.origin.x + x, y_in_webview),
+        NSSize::new(width, height),
+    );
+    let rect_in_window: NSRect =
+        unsafe { objc2::msg_send![webview_view, convertRect: rect_in_webview, toView: ptr::null::<NSView>()] };
+    let frame: NSRect =
+        unsafe { objc2::msg_send![content_view, convertRect: rect_in_window, fromView: ptr::null::<NSView>()] };
 
     eprintln!("[ghostty-diag] rect_to_frame:");
     eprintln!("  JS rect: x={}, y={}, w={}, h={}", rect.x, rect.y, rect.width, rect.height);
@@ -799,14 +801,12 @@ fn rect_to_frame(content_view: &NSView, webview_view: &NSView, rect: GhosttyRect
     eprintln!("  webview_frame: origin=({}, {}), size=({}, {})",
         webview_frame.origin.x, webview_frame.origin.y,
         webview_frame.size.width, webview_frame.size.height);
-    eprintln!("  content_bounds: origin=({}, {}), size=({}, {})",
-        content_bounds.origin.x, content_bounds.origin.y,
-        content_bounds.size.width, content_bounds.size.height);
+    eprintln!("  webview_bounds: origin=({}, {}), size=({}, {})",
+        webview_bounds.origin.x, webview_bounds.origin.y,
+        webview_bounds.size.width, webview_bounds.size.height);
     let content_flipped: bool = unsafe { objc2::msg_send![content_view, isFlipped] };
-    let webview_flipped: bool = unsafe { objc2::msg_send![webview_view, isFlipped] };
     eprintln!("  content_view.isFlipped={content_flipped}");
     eprintln!("  webview.isFlipped={webview_flipped}");
-    eprintln!("  title_bar_offset={title_bar_offset}, visible_height={visible_height}");
     eprintln!("  result frame: origin=({}, {}), size=({}, {})",
         frame.origin.x, frame.origin.y, frame.size.width, frame.size.height);
 
