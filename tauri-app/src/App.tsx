@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { Ghostty } from "./components/Ghostty";
 import { ProjectExplorer } from "./components/ProjectExplorer";
 import { AiChat } from "./components/AiChat";
@@ -12,6 +13,16 @@ function App() {
   const [isResizing, setIsResizing] = useState(false);
   const [activePanel, setActivePanel] = useState<SidePanel>("explorer");
   const { activeTerminalId, terminals, switchToFolder } = useTerminalManager();
+
+  // Auto-switch to AI panel when a nvim-action is received
+  useEffect(() => {
+    const unlisten = listen("nvim-action", () => {
+      setActivePanel("ai");
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
 
   const handleResizeStart = (e: React.MouseEvent) => {
     setIsResizing(true);

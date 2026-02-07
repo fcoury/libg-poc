@@ -27,7 +27,7 @@ serde_json = "1"
 raw-window-handle = "0.6"
 tokio = { version = "1", features = ["net", "sync", "rt", "macros", "process", "io-util"] }
 nvim-rs = { version = "0.9", features = ["use_tokio"] }
-rmpv = "1"
+rmpv = { version = "1", features = ["with-serde"] }
 agent-client-protocol = "0.9"
 async-trait = "0.1"
 tokio-util = { version = "0.7", features = ["compat"] }

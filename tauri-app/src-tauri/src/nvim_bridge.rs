@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use nvim_rs::compat::tokio::Compat;
 use nvim_rs::create::tokio as nvim_create;
 use nvim_rs::{Handler, Neovim};
 use rmpv::Value;
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
 use tokio::io::WriteHalf;
 use tokio::net::UnixStream;
 use tokio::sync::Mutex;
@@ -16,10 +18,45 @@ use tokio::task::JoinHandle;
 type Writer = Compat<WriteHalf<UnixStream>>;
 
 #[derive(Clone)]
-struct NvimHandler;
+struct NvimHandler {
+    app_handle: tauri::AppHandle,
+    terminal_id: String,
+}
 
+#[async_trait]
 impl Handler for NvimHandler {
     type Writer = Writer;
+
+    async fn handle_notify(
+        &self,
+        name: String,
+        args: Vec<Value>,
+        _neovim: Neovim<Self::Writer>,
+    ) {
+        if name != "libg_action" {
+            return;
+        }
+
+        let payload = match args.into_iter().next() {
+            Some(val) => val,
+            None => return,
+        };
+
+        let action = match parse_nvim_action(payload) {
+            Ok(a) => a,
+            Err(e) => {
+                log::error!("Failed to parse nvim action: {}", e);
+                return;
+            }
+        };
+
+        let event = NvimActionEvent {
+            terminal_id: self.terminal_id.clone(),
+            action,
+        };
+
+        let _ = self.app_handle.emit("nvim-action", &event);
+    }
 }
 
 struct NvimConnection {
@@ -96,17 +133,268 @@ pub enum ConnectionStatus {
     Error(String),
 }
 
+// -- Neovim action types (sent from Neovim → Tauri via rpcnotify) --
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase", tag = "action")]
+pub enum NvimAction {
+    FixDiagnostic {
+        file_path: String,
+        cursor_line: i64,
+        cursor_col: i64,
+        diagnostic: ActionDiagnostic,
+        context_lines: Vec<String>,
+        context_start_line: i64,
+    },
+    Implement {
+        file_path: String,
+        file_type: String,
+        cursor_line: i64,
+        signature_lines: Vec<String>,
+        context_lines: Vec<String>,
+        context_start_line: i64,
+    },
+    Explain {
+        file_path: String,
+        file_type: String,
+        cursor_line: i64,
+        target_text: String,
+        context_lines: Vec<String>,
+        context_start_line: i64,
+    },
+    Ask {
+        file_path: String,
+        file_type: String,
+        cursor_line: i64,
+        prompt: String,
+        selection: Option<String>,
+        context_lines: Vec<String>,
+        context_start_line: i64,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionDiagnostic {
+    pub line: i64,
+    pub col: i64,
+    pub severity: i64,
+    pub message: String,
+    pub source: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct NvimActionEvent {
+    pub terminal_id: String,
+    pub action: NvimAction,
+}
+
+// -- Helpers --
+
+fn parse_nvim_action(value: Value) -> Result<NvimAction, String> {
+    let json_value: serde_json::Value =
+        rmpv::ext::from_value(value).map_err(|e| e.to_string())?;
+    serde_json::from_value(json_value).map_err(|e| e.to_string())
+}
+
+fn build_lua_setup(channel_id: i64) -> String {
+    format!(
+        r#"
+_G.libg = _G.libg or {{}}
+_G.libg.channel = {channel_id}
+
+-- Helper: get context lines around a 1-indexed line
+local function get_context(radius)
+    local bufnr = vim.api.nvim_get_current_buf()
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local line = cursor[1]
+    local total = vim.api.nvim_buf_line_count(bufnr)
+    local start = math.max(1, line - radius)
+    local finish = math.min(total, line + radius)
+    local lines = vim.api.nvim_buf_get_lines(bufnr, start - 1, finish, false)
+    return lines, start
+end
+
+-- Helper: get visual selection text
+local function get_visual_selection()
+    local start_pos = vim.fn.getpos("'<")
+    local end_pos = vim.fn.getpos("'>")
+    local start_line = start_pos[2]
+    local end_line = end_pos[2]
+    local lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
+    if #lines == 0 then return "" end
+    local start_col = start_pos[3]
+    local end_col = end_pos[3]
+    if #lines == 1 then
+        lines[1] = string.sub(lines[1], start_col, end_col)
+    else
+        lines[1] = string.sub(lines[1], start_col)
+        lines[#lines] = string.sub(lines[#lines], 1, end_col)
+    end
+    return table.concat(lines, "\n")
+end
+
+-- Action: fix diagnostic under cursor
+function _G.libg.fix_diagnostic()
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local line = cursor[1]
+    local col = cursor[2]
+    local bufnr = vim.api.nvim_get_current_buf()
+    local diags = vim.diagnostic.get(bufnr, {{ lnum = line - 1 }})
+    if #diags == 0 then
+        vim.notify("[libg] No diagnostic on current line", vim.log.levels.WARN)
+        return
+    end
+    local d = diags[1]
+    local context_lines, context_start = get_context(30)
+    local file_path = vim.api.nvim_buf_get_name(bufnr)
+    vim.rpcnotify({channel_id}, "libg_action", {{
+        action = "fixDiagnostic",
+        filePath = file_path,
+        cursorLine = line,
+        cursorCol = col,
+        diagnostic = {{
+            line = d.lnum,
+            col = d.col,
+            severity = d.severity,
+            message = d.message,
+            source = d.source or "",
+        }},
+        contextLines = context_lines,
+        contextStartLine = context_start,
+    }})
+    vim.notify("[libg] Sent fix-diagnostic to agent", vim.log.levels.INFO)
+end
+
+-- Action: implement signature under cursor
+function _G.libg.implement()
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local line = cursor[1]
+    local bufnr = vim.api.nvim_get_current_buf()
+    local file_path = vim.api.nvim_buf_get_name(bufnr)
+    local file_type = vim.bo[bufnr].filetype
+    -- Grab current line as the signature
+    local sig_lines = vim.api.nvim_buf_get_lines(bufnr, line - 1, line, false)
+    local context_lines, context_start = get_context(50)
+    vim.rpcnotify({channel_id}, "libg_action", {{
+        action = "implement",
+        filePath = file_path,
+        fileType = file_type,
+        cursorLine = line,
+        signatureLines = sig_lines,
+        contextLines = context_lines,
+        contextStartLine = context_start,
+    }})
+    vim.notify("[libg] Sent implement to agent", vim.log.levels.INFO)
+end
+
+-- Action: explain code (normal or visual)
+function _G.libg.explain(use_selection)
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local line = cursor[1]
+    local bufnr = vim.api.nvim_get_current_buf()
+    local file_path = vim.api.nvim_buf_get_name(bufnr)
+    local file_type = vim.bo[bufnr].filetype
+    local target_text
+    if use_selection then
+        target_text = get_visual_selection()
+    else
+        target_text = vim.api.nvim_get_current_line()
+    end
+    local context_lines, context_start = get_context(30)
+    vim.rpcnotify({channel_id}, "libg_action", {{
+        action = "explain",
+        filePath = file_path,
+        fileType = file_type,
+        cursorLine = line,
+        targetText = target_text,
+        contextLines = context_lines,
+        contextStartLine = context_start,
+    }})
+    vim.notify("[libg] Sent explain to agent", vim.log.levels.INFO)
+end
+
+-- Action: ask with custom prompt (normal or visual)
+function _G.libg.ask(use_selection)
+    local prompt = vim.fn.input("libg ask: ")
+    if prompt == "" then return end
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local line = cursor[1]
+    local bufnr = vim.api.nvim_get_current_buf()
+    local file_path = vim.api.nvim_buf_get_name(bufnr)
+    local file_type = vim.bo[bufnr].filetype
+    local selection = nil
+    if use_selection then
+        selection = get_visual_selection()
+    end
+    local context_lines, context_start = get_context(30)
+    vim.rpcnotify({channel_id}, "libg_action", {{
+        action = "ask",
+        filePath = file_path,
+        fileType = file_type,
+        cursorLine = line,
+        prompt = prompt,
+        selection = selection,
+        contextLines = context_lines,
+        contextStartLine = context_start,
+    }})
+    vim.notify("[libg] Sent ask to agent", vim.log.levels.INFO)
+end
+
+-- Keybindings (<leader>m prefix = "model")
+vim.keymap.set("n", "<leader>mf", function() _G.libg.fix_diagnostic() end, {{ desc = "[libg] Fix diagnostic" }})
+vim.keymap.set("n", "<leader>mi", function() _G.libg.implement() end, {{ desc = "[libg] Implement" }})
+vim.keymap.set("n", "<leader>me", function() _G.libg.explain(false) end, {{ desc = "[libg] Explain" }})
+vim.keymap.set("v", "<leader>me", function() _G.libg.explain(true) end, {{ desc = "[libg] Explain selection" }})
+vim.keymap.set("n", "<leader>ma", function() _G.libg.ask(false) end, {{ desc = "[libg] Ask" }})
+vim.keymap.set("v", "<leader>ma", function() _G.libg.ask(true) end, {{ desc = "[libg] Ask with selection" }})
+
+-- User commands
+vim.api.nvim_create_user_command("LibgFixDiagnostic", function() _G.libg.fix_diagnostic() end, {{}})
+vim.api.nvim_create_user_command("LibgImplement", function() _G.libg.implement() end, {{}})
+vim.api.nvim_create_user_command("LibgExplain", function() _G.libg.explain(false) end, {{ range = true }})
+vim.api.nvim_create_user_command("LibgAsk", function() _G.libg.ask(false) end, {{ range = true }})
+
+vim.notify("[libg] Agent keybindings loaded", vim.log.levels.INFO)
+"#,
+        channel_id = channel_id,
+    )
+}
+
 // -- Tauri IPC commands --
 
 #[tauri::command]
 pub async fn nvim_connect(
+    app_handle: tauri::AppHandle,
     state: tauri::State<'_, Mutex<NvimBridgeState>>,
     terminal_id: String,
     socket_path: String,
 ) -> Result<(), String> {
-    let (nvim, io_handle) = nvim_create::new_path(&socket_path, NvimHandler)
+    let handler = NvimHandler {
+        app_handle,
+        terminal_id: terminal_id.clone(),
+    };
+
+    let (nvim, io_handle) = nvim_create::new_path(&socket_path, handler)
         .await
         .map_err(|e| format!("Failed to connect to neovim at {}: {}", socket_path, e))?;
+
+    // Get the channel ID so Lua can rpcnotify back to us
+    let api_info = nvim
+        .get_api_info()
+        .await
+        .map_err(|e| format!("Failed to get api info: {}", e))?;
+    let channel_id = api_info
+        .first()
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| "Failed to extract channel ID from api info".to_string())?;
+
+    // Inject keybindings into neovim
+    let lua_setup = build_lua_setup(channel_id);
+    nvim.exec_lua(&lua_setup, vec![])
+        .await
+        .map_err(|e| format!("Failed to inject lua keybindings: {}", e))?;
 
     let conn = NvimConnection {
         nvim,

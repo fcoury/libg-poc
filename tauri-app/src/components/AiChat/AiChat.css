@@ -17,12 +17,35 @@
   margin-bottom: var(--space-sm);
 }
 
+.ai-chat__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .ai-chat__title {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--text-secondary);
+}
+
+.ai-chat__auto-apply {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.ai-chat__auto-apply input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: rgba(var(--accent-blue), 1);
+  cursor: pointer;
 }
 
 /* ----------------------------------------

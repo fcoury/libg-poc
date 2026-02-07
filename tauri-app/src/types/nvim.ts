@@ -37,3 +37,57 @@ export interface BufferEdit {
 /** Simple status for UI display. The backend ConnectionStatus enum is richer
  *  (Connected carries socketPath), but the hook normalizes to these strings. */
 export type ConnectionStatus = "Connected" | "Disconnected" | "Error";
+
+// -- Neovim action types (sent from Neovim → Tauri via rpcnotify) --
+
+export interface ActionDiagnostic {
+  line: number;
+  col: number;
+  severity: number;
+  message: string;
+  source: string;
+}
+
+export type NvimAction =
+  | {
+      action: "fixDiagnostic";
+      filePath: string;
+      cursorLine: number;
+      cursorCol: number;
+      diagnostic: ActionDiagnostic;
+      contextLines: string[];
+      contextStartLine: number;
+    }
+  | {
+      action: "implement";
+      filePath: string;
+      fileType: string;
+      cursorLine: number;
+      signatureLines: string[];
+      contextLines: string[];
+      contextStartLine: number;
+    }
+  | {
+      action: "explain";
+      filePath: string;
+      fileType: string;
+      cursorLine: number;
+      targetText: string;
+      contextLines: string[];
+      contextStartLine: number;
+    }
+  | {
+      action: "ask";
+      filePath: string;
+      fileType: string;
+      cursorLine: number;
+      prompt: string;
+      selection: string | null;
+      contextLines: string[];
+      contextStartLine: number;
+    };
+
+export interface NvimActionEvent {
+  terminalId: string;
+  action: NvimAction;
+}

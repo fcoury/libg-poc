@@ -14,6 +14,8 @@ export function AiChat({ terminalId }: Props) {
   const {
     messages,
     isStreaming,
+    autoApply,
+    setAutoApply,
     sendMessage,
     applyProposedEdits,
     rejectProposedEdits,
@@ -76,7 +78,19 @@ export function AiChat({ terminalId }: Props) {
   return (
     <div className="ai-chat">
       <div className="ai-chat__header">
-        <div className="ai-chat__title">AI Chat</div>
+        <div className="ai-chat__title-row">
+          <div className="ai-chat__title">AI Chat</div>
+          {isConnected && isAgentRunning && (
+            <label className="ai-chat__auto-apply">
+              <input
+                type="checkbox"
+                checked={autoApply}
+                onChange={(e) => setAutoApply(e.target.checked)}
+              />
+              <span>Auto-apply</span>
+            </label>
+          )}
+        </div>
         <ContextBadge
           nvimStatus={nvim.status}
           agentStatus={acp.status}
