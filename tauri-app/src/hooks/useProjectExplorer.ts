@@ -1,8 +1,14 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { Project, ProjectFolder } from '../types/project-explorer';
+import { useLocalStorage } from './useLocalStorage';
 
-let nextProjectId = 1;
-let nextFolderId = 1;
+function stableId(prefix: string, path: string): string {
+  let hash = 0;
+  for (let i = 0; i < path.length; i++) {
+    hash = ((hash << 5) - hash + path.charCodeAt(i)) | 0;
+  }
+  return `${prefix}-${(hash >>> 0).toString(36)}`;
+}
 
 export interface UseProjectExplorerReturn {
   projects: Project[];
@@ -22,10 +28,19 @@ export interface UseProjectExplorerReturn {
 }
 
 export function useProjectExplorer(): UseProjectExplorerReturn {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [activeFolder, setActiveFolder] = useState<ProjectFolder | null>(null);
+  const [projects, setProjects] = useLocalStorage<Project[]>('libg:projects', []);
+  const [activeFolderId, setActiveFolderId] = useLocalStorage<string | null>('libg:activeFolderId', null);
   const [focusedFolderId, setFocusedFolderId] = useState<string | null>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
+
+  const activeFolder = useMemo(() => {
+    if (!activeFolderId) return null;
+    for (const p of projects) {
+      const f = p.folders.find((f) => f.id === activeFolderId);
+      if (f) return f;
+    }
+    return null;
+  }, [activeFolderId, projects]);
 
   // Get all folders from expanded projects (for keyboard navigation)
   const getAllFolders = useCallback((): ProjectFolder[] => {
@@ -45,10 +60,10 @@ export function useProjectExplorer(): UseProjectExplorerReturn {
         p.id === projectId ? { ...p, isExpanded: !p.isExpanded } : p
       )
     );
-  }, []);
+  }, [setProjects]);
 
   const selectFolder = useCallback((folder: ProjectFolder) => {
-    setActiveFolder(folder);
+    setActiveFolderId(folder.id);
     setFocusedFolderId(folder.id);
     // Update active state across all projects
     setProjects((prev) =>
@@ -60,7 +75,7 @@ export function useProjectExplorer(): UseProjectExplorerReturn {
         })),
       }))
     );
-  }, []);
+  }, [setActiveFolderId, setProjects]);
 
   const openPullRequest = useCallback((pr: { url?: string; number: number }) => {
     if (pr.url) {
@@ -69,8 +84,8 @@ export function useProjectExplorer(): UseProjectExplorerReturn {
   }, []);
 
   const addProject = useCallback((path: string, name: string) => {
-    const projectId = `proj-${nextProjectId++}`;
-    const folderId = `folder-${nextFolderId++}`;
+    const projectId = stableId('proj', path);
+    const folderId = stableId('folder', path);
     const folder: ProjectFolder = {
       id: folderId,
       name,
@@ -87,11 +102,15 @@ export function useProjectExplorer(): UseProjectExplorerReturn {
       folders: [folder],
       isExpanded: true,
     };
-    setProjects((prev) => [...prev, project]);
-  }, []);
+    setProjects((prev) => {
+      // Don't add duplicate projects
+      if (prev.some((p) => p.id === projectId)) return prev;
+      return [...prev, project];
+    });
+  }, [setProjects]);
 
   const addFolder = useCallback((projectId: string, path: string, name: string) => {
-    const folderId = `folder-${nextFolderId++}`;
+    const folderId = stableId('folder', path);
     const folder: ProjectFolder = {
       id: folderId,
       name,
@@ -101,25 +120,29 @@ export function useProjectExplorer(): UseProjectExplorerReturn {
       pullRequest: null,
     };
     setProjects((prev) =>
-      prev.map((p) =>
-        p.id === projectId
-          ? { ...p, folders: [...p.folders, folder] }
-          : p
-      )
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        // Don't add duplicate folders
+        if (p.folders.some((f) => f.id === folderId)) return p;
+        return { ...p, folders: [...p.folders, folder] };
+      })
     );
-  }, []);
+  }, [setProjects]);
 
   const removeProject = useCallback((projectId: string) => {
-    setProjects((prev) => prev.filter((p) => p.id !== projectId));
-    setActiveFolder((prev) => {
-      if (!prev) return null;
+    setProjects((prev) => {
+      const remaining = prev.filter((p) => p.id !== projectId);
       // Clear active folder if it belonged to the removed project
-      const stillExists = projects.some(
-        (p) => p.id !== projectId && p.folders.some((f) => f.id === prev.id)
-      );
-      return stillExists ? prev : null;
+      const removed = prev.find((p) => p.id === projectId);
+      if (removed && activeFolderId) {
+        const wasInRemoved = removed.folders.some((f) => f.id === activeFolderId);
+        if (wasInRemoved) {
+          setActiveFolderId(null);
+        }
+      }
+      return remaining;
     });
-  }, [projects]);
+  }, [activeFolderId, setActiveFolderId, setProjects]);
 
   const removeFolder = useCallback((folderId: string) => {
     setProjects((prev) =>
@@ -128,8 +151,10 @@ export function useProjectExplorer(): UseProjectExplorerReturn {
         folders: p.folders.filter((f) => f.id !== folderId),
       }))
     );
-    setActiveFolder((prev) => prev?.id === folderId ? null : prev);
-  }, []);
+    if (activeFolderId === folderId) {
+      setActiveFolderId(null);
+    }
+  }, [activeFolderId, setActiveFolderId, setProjects]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Show hotkeys when meta key is held
@@ -182,7 +207,7 @@ export function useProjectExplorer(): UseProjectExplorerReturn {
         selectFolder(folder);
       }
     }
-  }, [allFolders, projects, getAllFolders, focusedFolderId, selectFolder]);
+  }, [allFolders, projects, getAllFolders, focusedFolderId, selectFolder, setProjects]);
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Meta') {

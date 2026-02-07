@@ -4,14 +4,15 @@ import { Ghostty } from "./components/Ghostty";
 import { ProjectExplorer } from "./components/ProjectExplorer";
 import { AiChat } from "./components/AiChat";
 import { useTerminalManager } from "./hooks/useTerminalManager";
+import { useLocalStorage } from "./hooks/useLocalStorage";
 import "./App.css";
 
 type SidePanel = "explorer" | "ai";
 
 function App() {
-  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [sidebarWidth, setSidebarWidth] = useLocalStorage<number>('libg:sidebarWidth', 260);
   const [isResizing, setIsResizing] = useState(false);
-  const [activePanel, setActivePanel] = useState<SidePanel>("explorer");
+  const [activePanel, setActivePanel] = useLocalStorage<SidePanel>('libg:activePanel', 'explorer');
   const { activeTerminalId, terminals, switchToFolder } = useTerminalManager();
 
   // Auto-switch to AI panel when a nvim-action is received

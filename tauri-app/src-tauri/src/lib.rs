@@ -1,8 +1,11 @@
 mod acp_client;
 mod ghostty_embed;
 mod nvim_bridge;
+mod socket_manager;
 
 use ghostty_embed::{with_manager, GhosttyOptions, GhosttyRect};
+use socket_manager::SocketManager;
+use tauri::Manager;
 use tokio::sync::Mutex;
 
 #[tauri::command]
@@ -116,13 +119,28 @@ fn ghostty_write_text(
     rx.recv().unwrap_or_else(|_| Err("ghostty_write_text failed".to_string()))
 }
 
+#[tauri::command]
+async fn get_socket_path(
+    state: tauri::State<'_, std::sync::Mutex<SocketManager>>,
+    terminal_id: String,
+) -> Result<String, String> {
+    let mut mgr = state.lock().map_err(|e| e.to_string())?;
+    let path = mgr.socket_path(&terminal_id);
+    mgr.register(path.clone());
+    Ok(path.to_string_lossy().into_owned())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Clean up sockets left behind by crashed instances
+    SocketManager::cleanup_stale();
+
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(nvim_bridge::NvimBridgeState::new()))
         .manage(Mutex::new(acp_client::AcpClientState::new()))
+        .manage(std::sync::Mutex::new(SocketManager::new()))
         .invoke_handler(tauri::generate_handler![
             // Ghostty
             ghostty_create,
@@ -147,6 +165,8 @@ pub fn run() {
             acp_client::acp_agent_status,
             acp_client::acp_create_session,
             acp_client::acp_send_prompt,
+            // Socket management
+            get_socket_path,
         ]);
 
     #[cfg(all(debug_assertions, feature = "mcp-debug"))]
@@ -154,7 +174,17 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_mcp_bridge::init());
     }
 
-    builder
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|_handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            if let Some(state) = _handle.try_state::<std::sync::Mutex<SocketManager>>() {
+                if let Ok(mut mgr) = state.inner().lock() {
+                    mgr.cleanup_all();
+                }
+            }
+        }
+    });
 }

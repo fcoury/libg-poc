@@ -2,21 +2,34 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useNvimBridge } from "./useNvimBridge";
 import { useAcpAgent } from "./useAcpAgent";
+import { useLocalStorage } from "./useLocalStorage";
 import type { ChatMessage } from "../types/ai-chat";
 import type { AcpEvent } from "../types/acp";
 import type { NvimAction, NvimActionEvent } from "../types/nvim";
 
-let messageIdCounter = 0;
 function nextMessageId(): string {
-  return `msg-${++messageIdCounter}-${Date.now()}`;
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+const MAX_PERSISTED_MESSAGES = 200;
 
 export function useAiChat(terminalId: string | null) {
   const nvim = useNvimBridge(terminalId);
   const acp = useAcpAgent();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useLocalStorage<ChatMessage[]>('libg:chatMessages', []);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [autoApply, setAutoApply] = useState(false);
+  const [autoApply, setAutoApply] = useLocalStorage<boolean>('libg:autoApply', false);
+
+  // Trim messages on mount to prevent unbounded growth
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length > MAX_PERSISTED_MESSAGES) {
+        return prev.slice(-MAX_PERSISTED_MESSAGES);
+      }
+      return prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const currentAssistantIdRef = useRef<string | null>(null);
   const autoApplyRef = useRef(autoApply);
   const actionTriggeredRef = useRef(false);

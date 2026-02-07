@@ -42,7 +42,7 @@ export function AiChat({ terminalId }: Props) {
     if (!terminalId) return;
     setIsStartingNvim(true);
     try {
-      const socketPath = `/tmp/libg-nvim-${terminalId}.sock`;
+      const socketPath = await invoke<string>("get_socket_path", { terminalId });
       await invoke("ghostty_write_text", {
         id: terminalId,
         text: `nvim --listen ${socketPath} .\n`,

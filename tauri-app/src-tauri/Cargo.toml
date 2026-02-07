@@ -32,6 +32,7 @@ agent-client-protocol = "0.9"
 async-trait = "0.1"
 tokio-util = { version = "0.7", features = ["compat"] }
 log = "0.4"
+libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 ghostty-sys = "0.1.1"
